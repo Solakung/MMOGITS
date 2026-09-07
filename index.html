@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>8-Bit Ecosystem RPG</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="game-wrapper">
+    <!-- แถบสถานะโลก -->
+    <div id="world-status">
+      <div>ป่า: <span id="wrath-txt">0%</span></div>
+      <div>กรรม: <span id="karma-txt">เป็นกลาง</span></div>
+      <div>มอนสเตอร์: <span id="mob-txt">0</span></div>
+    </div>
+
+    <!-- จอเกม 8-Bit -->
+    <canvas id="gameCanvas" width="320" height="240"></canvas>
+
+    <!-- บันทึกเหตุการณ์ในโลกจำลอง -->
+    <div id="log-box"></div>
+
+    <!-- แผงควบคุมบนหน้าจอมือถือ (Virtual Controls) -->
+    <div id="touch-controls">
+      <div id="dpad">
+        <button class="btn-dpad up" data-dir="up">▲</button>
+        <button class="btn-dpad left" data-dir="left">◀</button>
+        <button class="btn-dpad right" data-dir="right">▶</button>
+        <button class="btn-dpad down" data-dir="down">▼</button>
+      </div>
+
+      <div id="action-pad">
+        <button class="btn-action attack" id="btn-atk">⚔️ ล่า</button>
+        <button class="btn-action feed" id="btn-feed">🍎 สัมพันธ์</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

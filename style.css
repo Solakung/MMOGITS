@@ -1,0 +1,122 @@
+* {
+  box-sizing: border-box;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none; /* ป้องกันการเลื่อนหน้าจอบนมือถือ */
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #121216;
+  color: #e0e0e0;
+  font-family: monospace;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#game-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 480px;
+  height: 100%;
+  padding: 8px;
+}
+
+#world-status {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 11px;
+  color: #ffd166;
+  margin-bottom: 4px;
+}
+
+canvas {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #1c281a;
+  border: 3px solid #3a3a4c;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+#log-box {
+  width: 100%;
+  height: 48px;
+  background: #0a0a0f;
+  border: 1px solid #282834;
+  margin-top: 6px;
+  padding: 4px 6px;
+  font-size: 10px;
+  color: #a8a8b8;
+  overflow-y: hidden;
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+/* ปุ่มควบคุมระบบสัมผัส */
+#touch-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  flex-grow: 1;
+  padding: 10px 10px 20px 10px;
+}
+
+#dpad {
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+
+.btn-dpad {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background: #2a2a38;
+  color: #ffffff;
+  border: 2px solid #4a4a60;
+  border-radius: 8px;
+  font-size: 14px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.btn-dpad:active { background: #505070; }
+.btn-dpad.up { top: 0; left: 40px; }
+.btn-dpad.down { bottom: 0; left: 40px; }
+.btn-dpad.left { top: 40px; left: 0; }
+.btn-dpad.right { top: 40px; right: 0; }
+
+#action-pad {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-action {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 2px solid #555;
+  color: #fff;
+  font-size: 11px;
+  font-weight: bold;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.btn-action.attack { background: #7a2222; border-color: #b03030; }
+.btn-action.attack:active { background: #b03030; }
+.btn-action.feed { background: #226030; border-color: #309048; }
+.btn-action.feed:active { background: #309048; }
