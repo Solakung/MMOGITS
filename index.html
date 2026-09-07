@@ -3,34 +3,45 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>8-Bit Ecosystem MMORPG</title>
+  <title>Chronicles of 8-Bit World</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <div id="game-wrapper">
-    <!-- แถบข้อมูลตัวละครและสถานะโลก -->
-    <div id="top-bar">
-      <div id="player-stats">
-        <div><strong>Lv.<span id="lvl-txt">1</span></strong> (EXP: <span id="exp-txt">0/30</span>)</div>
-        <div id="hp-bar-bg"><div id="hp-bar-fill"></div></div>
+    <!-- แถบสถานะด้านบน -->
+    <div id="hud-top">
+      <div class="hud-col">
+        <div class="stat-row"><strong>Lv.<span id="lvl-txt">1</span></strong> (<span id="gold-txt">0</span>🪙)</div>
+        <div class="bar-container hp"><div id="hp-bar" class="bar-fill"></div></div>
+        <div class="bar-container mp"><div id="mp-bar" class="bar-fill"></div></div>
       </div>
-      <div id="world-stats">
-        <div>ความแค้นป่า: <span id="wrath-txt">0%</span></div>
-        <div>ทอง: <span id="gold-txt">0</span> 🪙</div>
+      
+      <div class="hud-col center">
+        <div id="clock-txt">☀️ กลางวัน (12:00)</div>
+        <div id="world-state-txt" style="color:#72dec2;">สมดุลป่าปกติ</div>
+      </div>
+
+      <div class="hud-col right">
+        <div>ความแค้น: <span id="wrath-txt" style="color:#ff5555;">0%</span></div>
+        <div style="font-size:9px;">กรรม: <span id="karma-txt">เป็นกลาง</span></div>
       </div>
     </div>
 
-    <!-- จอเกม 8-Bit -->
+    <!-- แถบเควสต์ที่ AI มอบหมาย -->
+    <div id="quest-bar">
+      📜 <strong>ภารกิจ:</strong> <span id="quest-desc">กำลังรอสัญญาณจากผู้เฒ่า...</span>
+    </div>
+
+    <!-- จอเกม 8-Bit คมชัดพิเศษ -->
     <canvas id="gameCanvas" width="320" height="240"></canvas>
 
-    <!-- ช่องแชตโลก MMORPG -->
+    <!-- ช่องบันทึกเหตุการณ์และแชตโลก -->
     <div id="chat-box">
-      <div class="chat-header">📡 ช่องแชตรวม (World Channel)</div>
-      <div id="log-box"></div>
+      <div id="log-content"></div>
     </div>
 
-    <!-- ปุ่มควบคุมเสมือนบนจอมือถือ -->
+    <!-- แผงควบคุมเสมือน (Gamepad) -->
     <div id="touch-controls">
       <div id="dpad">
         <button class="btn-dpad up" data-dir="up">▲</button>
@@ -39,14 +50,16 @@
         <button class="btn-dpad down" data-dir="down">▼</button>
       </div>
 
-      <div id="action-pad">
-        <button class="btn-action skill" id="btn-skill">⚡ คลื่นดาบ</button>
-        <button class="btn-action feed" id="btn-feed">🍎 สัมพันธ์</button>
-        <button class="btn-action attack" id="btn-atk">⚔️ โจมตี</button>
+      <div id="action-grid">
+        <button class="btn-act skill1" id="btn-spin">🌀 หมุน</button>
+        <button class="btn-act skill2" id="btn-shield">🛡️ โล่</button>
+        <button class="btn-act skill3" id="btn-heal">🌿 ฮีล</button>
+        <button class="btn-act attack" id="btn-atk">⚔️ ฟัน</button>
+        <button class="btn-act feed" id="btn-feed">🍎 สัมพันธ์</button>
       </div>
     </div>
   </div>
 
-  <script src="game.js?v=4"></script>
+  <script src="game.js?v=5"></script>
 </body>
 </html>
