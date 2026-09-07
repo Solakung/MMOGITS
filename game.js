@@ -1,212 +1,106 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-
-// ปิดการเบลอของพิกเซล เพื่อให้ภาพคมชัดแบบ 8-bit
 ctx.imageSmoothingEnabled = false;
 
-// --- 1. บันทึกและสถานะโลก (World State) ---
-const savedWorld = JSON.parse(localStorage.getItem('mmo_world_state')) || {
-  forestWrath: 0,
-  karmaScore: 0,
-  huntCount: 0,
-  feedCount: 0
+// --- 1. ข้อมูลผู้เล่นและระบบ Progression ---
+const player = {
+  x: 150,
+  y: 120,
+  speed: 1.6,
+  isMoving: false,
+  attackTimer: 0,
+  hp: 100,
+  maxHp: 100,
+  level: 1,
+  exp: 0,
+  maxExp: 30,
+  gold: 0,
+  dir: 'right'
 };
 
 const world = {
-  ...savedWorld,
+  forestWrath: 0,
+  bossActive: false,
   save() {
-    localStorage.setItem('mmo_world_state', JSON.stringify({
-      forestWrath: this.forestWrath,
-      karmaScore: this.karmaScore,
-      huntCount: this.huntCount,
-      feedCount: this.feedCount
+    localStorage.setItem('mmo_progress', JSON.stringify({
+      level: player.level,
+      exp: player.exp,
+      gold: player.gold,
+      wrath: this.forestWrath
     }));
   }
 };
 
-function logMsg(msg) {
+// โหลดข้อมูลเดิมถ้ามี
+const saved = JSON.parse(localStorage.getItem('mmo_progress'));
+if (saved) {
+  player.level = saved.level || 1;
+  player.exp = saved.exp || 0;
+  player.gold = saved.gold || 0;
+  world.forestWrath = saved.wrath || 0;
+}
+
+function logChat(sender, msg, color = '#ddd') {
   const box = document.getElementById('log-box');
   if (!box) return;
   const div = document.createElement('div');
-  div.innerText = msg;
+  div.innerHTML = `<span style="color:${color}">[${sender}]</span>: ${msg}`;
   box.prepend(div);
   while (box.children.length > 5) box.removeChild(box.lastChild);
 }
 
-// --- 2. ตัวละคร ผู้เล่น และสิ่งแวดล้อม ---
+// --- 2. วัตถุในเกม (กระสุน, ดรอปไอเทม, บอส) ---
+const projectiles = [];
+const loots = [];
+const particles = [];
 let frameCount = 0;
-const particles = []; // สำหรับเอฟเฟกต์ฟันดาบและตัวเลขความเสียหาย
+let boss = null;
 
-const player = {
-  x: 150,
-  y: 110,
-  speed: 1.6,
-  facing: 'down',
-  isMoving: false,
-  attackTimer: 0
-};
-
-// จำลองผู้เล่นคนอื่น (Simulated Online Adventurers)
+// ผู้เล่นเสมือน (MMO NPC Players)
 const otherPlayers = [
-  { name: 'Mage_Rin', x: 70, y: 60, role: 'mage', vx: 0, vy: 0, timer: 0 },
-  { name: 'Rogue_Z', x: 240, y: 170, role: 'rogue', vx: 0, vy: 0, timer: 0 }
-];
-
-// ตกแต่งฉาก (ต้นไม้และหิน 8-bit)
-const scenery = [
-  { type: 'tree', x: 30, y: 30 },
-  { type: 'tree', x: 260, y: 40 },
-  { type: 'tree', x: 40, y: 180 },
-  { type: 'tree', x: 270, y: 190 },
-  { type: 'rock', x: 100, y: 140 },
-  { type: 'rock', x: 200, y: 80 }
+  { name: 'Kael', role: 'warrior', x: 60, y: 80, vx: 0, vy: 0, timer: 0 },
+  { name: 'Sylvia', role: 'mage', x: 250, y: 160, vx: 0, vy: 0, timer: 0 }
 ];
 
 // มอนสเตอร์
 const monsters = [];
-const MAX_MOBS = 6;
-
 function spawnMonster() {
-  const isMutant = world.forestWrath >= 50 && Math.random() < 0.6;
+  const isMutant = world.forestWrath >= 60;
   monsters.push({
-    id: 'M' + Math.floor(Math.random() * 900 + 100),
-    x: Math.random() * (canvas.width - 50) + 25,
-    y: Math.random() * (canvas.height - 50) + 25,
+    id: 'M' + Math.floor(Math.random() * 800 + 100),
+    x: Math.random() * (canvas.width - 40) + 20,
+    y: Math.random() * (canvas.height - 40) + 20,
     type: isMutant ? 'mutant' : 'slime',
-    hp: isMutant ? 40 : 20,
-    maxHp: isMutant ? 40 : 20,
+    hp: isMutant ? 45 : 20,
+    maxHp: isMutant ? 45 : 20,
     isAggressive: isMutant,
     isFriendly: false,
     affinity: 0,
     timer: 0,
     vx: 0,
-    vy: 0,
-    bobOffset: Math.random() * 10
+    vy: 0
   });
 }
-
 for (let i = 0; i < 5; i++) spawnMonster();
 
-// --- 3. ระบบเรนเดอร์พิกเซลอาร์ต 8-Bit (Procedural Pixel Art) ---
-
-// วาดสไปรต์แบบตารางพิกเซล (ตารางขนาด 8x8 ขยายเป็น 16x16 พิกเซล)
-function drawPixelMatrix(matrix, startX, startY, scale = 2) {
-  for (let r = 0; r < matrix.length; r++) {
-    for (let c = 0; c < matrix[r].length; c++) {
-      const color = matrix[r][c];
-      if (color) {
-        ctx.fillStyle = color;
-        ctx.fillRect(Math.floor(startX + c * scale), Math.floor(startY + r * scale), scale, scale);
-      }
-    }
-  }
+// เรียกบอสเมื่อป่าพิโรธเต็ม 100%
+function triggerBoss() {
+  if (world.bossActive) return;
+  world.bossActive = true;
+  boss = {
+    name: 'Ancient Drake',
+    x: 135,
+    y: 40,
+    hp: 250,
+    maxHp: 250,
+    size: 28,
+    timer: 0
+  };
+  logChat('ระบบ', '🚨 ป่าพิโรธถึงขีดสุด! มังกรโบราณ Ancient Drake ตื่นขึ้นมาแล้ว!', '#ff3838');
+  logChat('Kael', 'เหวอ! บอสเกิดแล้ว ทุกคนเตรียมอาวุธเร็ว!', '#ffd166');
 }
 
-// 1. สไปรต์อัศวิน (ผู้เล่น)
-const C_SKIN = '#ffd8b1', C_HAIR = '#6a4c28', C_ARMOR = '#2b7fff', C_EYE = '#1a1a1a', C_BLADE = '#e0e0e0';
-function drawPlayerSprite(x, y, isMoving, tick) {
-  const step = isMoving && (Math.floor(tick / 8) % 2 === 0);
-  const footColor = step ? '#3a3a4c' : '#1a1a28';
-  
-  const sprite = [
-    [null,   C_HAIR,  C_HAIR,  C_HAIR,  C_HAIR,  null],
-    [C_HAIR, C_SKIN,  C_EYE,   C_SKIN,  C_EYE,   C_HAIR],
-    [null,   C_SKIN,  C_SKIN,  C_SKIN,  C_SKIN,  null],
-    [C_ARMOR,C_ARMOR, C_ARMOR, C_ARMOR, C_ARMOR, C_ARMOR],
-    [C_BLADE,C_ARMOR, C_ARMOR, C_ARMOR, C_ARMOR, null],
-    [null,   footColor, null,  null,    footColor, null]
-  ];
-  drawPixelMatrix(sprite, x, y, 2.5);
-}
-
-// 2. สไปรต์มอนสเตอร์สไลม์ป่า (Slime)
-function drawSlimeSprite(x, y, isFriendly, tick, offset) {
-  const squish = Math.sin((tick + offset) * 0.15) > 0;
-  const baseColor = isFriendly ? '#52b788' : '#74c69d';
-  const eyeColor = isFriendly ? '#1b4332' : '#081c15';
-  
-  let sprite;
-  if (squish) {
-    sprite = [
-      [null,      null,      '#2d6a4f', null,      null],
-      [null,      baseColor, baseColor, baseColor, null],
-      [baseColor, eyeColor,  baseColor, eyeColor,  baseColor],
-      [baseColor, baseColor, baseColor, baseColor, baseColor]
-    ];
-  } else {
-    sprite = [
-      [null,      '#2d6a4f', null,      null,      null],
-      [null,      baseColor, baseColor, null,      null],
-      [baseColor, eyeColor,  baseColor, eyeColor,  baseColor],
-      [baseColor, baseColor, baseColor, baseColor, baseColor],
-      [baseColor, baseColor, baseColor, baseColor, baseColor]
-    ];
-  }
-  drawPixelMatrix(sprite, x, y, 2.5);
-
-  if (isFriendly) {
-    // วาดหัวใจเล็กๆ เหนือหัว
-    ctx.fillStyle = '#ff4d6d';
-    ctx.fillRect(x + 4, y - 6, 4, 3);
-  }
-}
-
-// 3. สไปรต์มอนสเตอร์กลายพันธุ์ (Mutant Beast)
-function drawMutantSprite(x, y, tick) {
-  const bob = Math.floor(Math.sin(tick * 0.1) * 1.5);
-  const sprite = [
-    ['#ffb703', null,      null,      null,      '#ffb703'], // เขา
-    [null,      '#d90429', '#d90429', '#d90429', null],
-    ['#d90429', '#ffea00', '#d90429', '#ffea00', '#d90429'], // ตาเรืองแสง
-    ['#d90429', '#ef233c', '#d90429', '#ef233c', '#d90429'],
-    [null,      '#800f2f', null,      '#800f2f', null]       // กรงเล็บ
-  ];
-  drawPixelMatrix(sprite, x, y + bob, 2.5);
-}
-
-// 4. สไปรต์นักผจญภัยอื่น (บอท)
-function drawOtherPlayerSprite(p, tick) {
-  const isMage = p.role === 'mage';
-  const robeColor = isMage ? '#9d4edd' : '#d90429';
-  const hatColor = isMage ? '#5a189a' : '#6a040f';
-  
-  const sprite = [
-    [null,      hatColor,  hatColor,  hatColor,  null],
-    [hatColor,  C_SKIN,    C_EYE,     C_SKIN,    hatColor],
-    [robeColor, robeColor, robeColor, robeColor, robeColor],
-    [null,      robeColor, robeColor, robeColor, null],
-    [null,      '#111',    null,      '#111',    null]
-  ];
-  drawPixelMatrix(sprite, p.x, p.y, 2.2);
-
-  // ชื่อตัวละครด้านบน
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '8px monospace';
-  ctx.fillText(p.name, p.x - 4, p.y - 3);
-}
-
-// 5. วาดต้นไม้และหิน
-function drawScenery() {
-  scenery.forEach(s => {
-    if (s.type === 'tree') {
-      // พุ่มใบไม้ 8-bit
-      ctx.fillStyle = '#1b4332';
-      ctx.fillRect(s.x + 2, s.y, 16, 14);
-      ctx.fillStyle = '#2d6a4f';
-      ctx.fillRect(s.x + 4, s.y + 2, 12, 10);
-      // ลำต้น
-      ctx.fillStyle = '#582f0e';
-      ctx.fillRect(s.x + 8, s.y + 14, 4, 8);
-    } else if (s.type === 'rock') {
-      ctx.fillStyle = '#495057';
-      ctx.fillRect(s.x, s.y + 2, 12, 8);
-      ctx.fillStyle = '#6c757d';
-      ctx.fillRect(s.x + 2, s.y, 8, 4);
-    }
-  });
-}
-
-// --- 4. การควบคุม (คีย์บอร์ด + สัมผัส) ---
+// --- 3. การควบคุม ---
 const moveState = { up: false, down: false, left: false, right: false };
 
 document.querySelectorAll('.btn-dpad').forEach(btn => {
@@ -221,10 +115,11 @@ window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (k === 'w' || k === 'arrowup') moveState.up = true;
   if (k === 's' || k === 'arrowdown') moveState.down = true;
-  if (k === 'a' || k === 'arrowleft') moveState.left = true;
-  if (k === 'd' || k === 'arrowright') moveState.right = true;
-  if (e.code === 'Space') executeAttack();
-  if (k === 'e') executeFeed();
+  if (k === 'a' || k === 'arrowleft') { moveState.left = true; player.dir = 'left'; }
+  if (k === 'd' || k === 'arrowright') { moveState.right = true; player.dir = 'right'; }
+  if (e.code === 'Space') attack();
+  if (k === 'e') feed();
+  if (k === 'q') shootSkill();
 });
 
 window.addEventListener('keyup', e => {
@@ -235,67 +130,87 @@ window.addEventListener('keyup', e => {
   if (k === 'd' || k === 'arrowright') moveState.right = false;
 });
 
-// --- 5. ระบบการกระทำและผลกระทบ (Actions & FX) ---
-function executeAttack() {
+// --- 4. แอ็กชันและระบบต่อสู้ ---
+function attack() {
   player.attackTimer = 10;
-  let hit = false;
+  let hitTarget = false;
+
+  // ตีมอนสเตอร์
   monsters.forEach((m, idx) => {
     const d = Math.hypot(m.x - player.x, m.y - player.y);
-    if (d < 30 && !hit) {
-      hit = true;
-      m.hp -= 15;
+    if (d < 30 && !hitTarget) {
+      hitTarget = true;
+      const dmg = 12 + player.level * 3;
+      m.hp -= dmg;
       m.isAggressive = true;
-      m.affinity -= 4;
-
-      // เพิ่มตัวเลข Damage ลอย
-      particles.push({ text: '-15', x: m.x + 4, y: m.y - 4, color: '#ff4d4d', life: 25 });
-      logMsg(`⚔️ โจมตี ${m.id}! ป่ารับรู้ถึงอันตราย`);
+      m.affinity -= 3;
+      particles.push({ text: `-${dmg}`, x: m.x, y: m.y - 4, color: '#ff5555', life: 25 });
 
       if (m.hp <= 0) {
+        // ดรอปไอเทม
+        loots.push({ x: m.x, y: m.y, type: 'gold', val: 5 });
+        loots.push({ x: m.x + 4, y: m.y + 4, type: 'exp', val: 12 });
         monsters.splice(idx, 1);
-        world.huntCount++;
-        world.forestWrath = Math.min(100, world.forestWrath + 12);
-        world.karmaScore -= 2;
+        world.forestWrath = Math.min(100, world.forestWrath + 18);
         world.save();
-        logMsg(`💀 สังหาร ${m.id} ป่าพิโรธขึ้น (${world.forestWrath}%)`);
+        if (world.forestWrath >= 100) triggerBoss();
       }
     }
   });
-  if (!hit) {
-    particles.push({ text: 'MISS', x: player.x, y: player.y - 6, color: '#888', life: 15 });
+
+  // ตีบอส
+  if (boss && Math.hypot(boss.x - player.x, boss.y - player.y) < 38) {
+    const dmg = 15 + player.level * 4;
+    boss.hp -= dmg;
+    particles.push({ text: `-${dmg}!`, x: boss.x + 10, y: boss.y, color: '#ffb703', life: 30 });
+    if (boss.hp <= 0) {
+      logChat('ระบบ', '🎉 บอสถูกปราบแล้ว! สันติภาพกลับคืนสู่ผืนป่า', '#06d6a0');
+      loots.push({ x: boss.x, y: boss.y, type: 'gold', val: 50 });
+      loots.push({ x: boss.x + 8, y: boss.y, type: 'exp', val: 60 });
+      boss = null;
+      world.bossActive = false;
+      world.forestWrath = 0;
+      world.save();
+    }
   }
 }
 
-function executeFeed() {
-  let fed = false;
+function shootSkill() {
+  const vx = player.dir === 'left' ? -3 : 3;
+  projectiles.push({
+    x: player.x + 6,
+    y: player.y + 6,
+    vx: vx,
+    vy: 0,
+    life: 50
+  });
+  particles.push({ text: '⚡คลื่นดาบ!', x: player.x, y: player.y - 6, color: '#48cae4', life: 20 });
+}
+
+function feed() {
   monsters.forEach(m => {
     const d = Math.hypot(m.x - player.x, m.y - player.y);
-    if (d < 30 && !fed) {
-      fed = true;
+    if (d < 32 && !m.isFriendly) {
       m.affinity += 5;
       if (m.affinity >= 5) {
         m.isFriendly = true;
         m.isAggressive = false;
-        particles.push({ text: '❤️ มิตรภาพ', x: m.x, y: m.y - 6, color: '#52b788', life: 30 });
-        logMsg(`🌿 ${m.id} ไว้วางใจคุณ และจะคอยติดตาม`);
+        particles.push({ text: '❤️ มิตรภาพ!', x: m.x, y: m.y - 6, color: '#52b788', life: 30 });
+        logChat('Sylvia', `ดูนั่นสิ! เจ้า ${m.id} เชื่องแล้ว มันจะช่วยเราสู้เวลาคับขันนะ`, '#b5e2fa');
       } else {
-        particles.push({ text: '+ความผูกพัน', x: m.x, y: m.y - 4, color: '#ffd166', life: 25 });
-        logMsg(`🍎 แบ่งปันอาหารให้ ${m.id}`);
+        particles.push({ text: '+ความเชื่อใจ', x: m.x, y: m.y - 4, color: '#ffd166', life: 25 });
       }
-      world.feedCount++;
-      world.forestWrath = Math.max(0, world.forestWrath - 5);
-      world.karmaScore += 2;
+      world.forestWrath = Math.max(0, world.forestWrath - 6);
       world.save();
     }
   });
 }
 
-document.getElementById('btn-atk').addEventListener('touchstart', e => { e.preventDefault(); executeAttack(); });
-document.getElementById('btn-atk').addEventListener('click', executeAttack);
-document.getElementById('btn-feed').addEventListener('touchstart', e => { e.preventDefault(); executeFeed(); });
-document.getElementById('btn-feed').addEventListener('click', executeFeed);
+document.getElementById('btn-atk').addEventListener('click', attack);
+document.getElementById('btn-skill').addEventListener('click', shootSkill);
+document.getElementById('btn-feed').addEventListener('click', feed);
 
-// --- 6. ลูปตรรกะและการอัปเดต (Game Loop) ---
+// --- 5. ลูปอัปเดตระบบเกม ---
 function update() {
   frameCount++;
   player.isMoving = false;
@@ -305,23 +220,57 @@ function update() {
   if (moveState.left) { player.x -= player.speed; player.isMoving = true; }
   if (moveState.right) { player.x += player.speed; player.isMoving = true; }
 
-  player.x = Math.max(8, Math.min(canvas.width - 24, player.x));
-  player.y = Math.max(8, Math.min(canvas.height - 24, player.y));
-
+  player.x = Math.max(6, Math.min(canvas.width - 20, player.x));
+  player.y = Math.max(6, Math.min(canvas.height - 20, player.y));
   if (player.attackTimer > 0) player.attackTimer--;
 
-  // อัปเดตมอนสเตอร์ AI
-  monsters.forEach(m => {
-    const d = Math.hypot(player.x - m.x, player.y - m.y);
+  // อัปเดตคลื่นดาบ (Skill Projectiles)
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const p = projectiles[i];
+    p.x += p.vx;
+    p.life--;
 
-    if (m.isFriendly) {
-      if (d > 30) {
-        m.x += ((player.x - m.x) / d) * 0.8;
-        m.y += ((player.y - m.y) / d) * 0.8;
+    // เช็คชนมอนสเตอร์
+    monsters.forEach(m => {
+      if (Math.hypot(m.x - p.x, m.y - p.y) < 14) {
+        m.hp -= 20;
+        p.life = 0;
+        particles.push({ text: '-20', x: m.x, y: m.y - 4, color: '#00b4d8', life: 20 });
       }
-    } else if (m.isAggressive && d < 75) {
-      m.x += ((player.x - m.x) / d) * 1.0;
-      m.y += ((player.y - m.y) / d) * 1.0;
+    });
+    // เช็คชนบอส
+    if (boss && Math.hypot(boss.x + 10 - p.x, boss.y + 10 - p.y) < 20) {
+      boss.hp -= 22;
+      p.life = 0;
+      particles.push({ text: '-22', x: boss.x + 8, y: boss.y, color: '#00b4d8', life: 20 });
+    }
+    if (p.life <= 0) projectiles.splice(i, 1);
+  }
+
+  // อัปเดตมอนสเตอร์ & มอนสเตอร์ที่เป็นมิตรช่วยสู้
+  monsters.forEach(m => {
+    if (m.isFriendly) {
+      // มอนสเตอร์มิตรจะวิ่งไปรุมตีบอส ถ้ามีบอส
+      const target = boss ? boss : player;
+      const d = Math.hypot(target.x - m.x, target.y - m.y);
+      if (d > 25) {
+        m.x += ((target.x - m.x) / d) * 1.0;
+        m.y += ((target.y - m.y) / d) * 1.0;
+      }
+      if (boss && d < 30 && frameCount % 30 === 0) {
+        boss.hp -= 8;
+        particles.push({ text: '-8 (สหาย)', x: boss.x, y: boss.y - 2, color: '#52b788', life: 20 });
+      }
+    } else if (m.isAggressive) {
+      const d = Math.hypot(player.x - m.x, player.y - m.y);
+      if (d < 70) {
+        m.x += ((player.x - m.x) / d) * 0.9;
+        m.y += ((player.y - m.y) / d) * 0.9;
+        if (d < 14 && frameCount % 40 === 0) {
+          player.hp = Math.max(0, player.hp - 8);
+          particles.push({ text: '-8', x: player.x, y: player.y - 4, color: '#ff2222', life: 20 });
+        }
+      }
     } else {
       m.timer--;
       if (m.timer <= 0) {
@@ -329,94 +278,143 @@ function update() {
         m.vy = (Math.random() - 0.5) * 0.6;
         m.timer = Math.floor(Math.random() * 50) + 30;
       }
-      m.x += m.vx;
-      m.y += m.vy;
+      m.x = Math.max(6, Math.min(canvas.width - 20, m.x + m.vx));
+      m.y = Math.max(6, Math.min(canvas.height - 20, m.y + m.vy));
     }
-
-    m.x = Math.max(8, Math.min(canvas.width - 20, m.x));
-    m.y = Math.max(8, Math.min(canvas.height - 20, m.y));
   });
 
-  // อัปเดตผู้เล่นจำลอง
-  otherPlayers.forEach(p => {
-    p.timer--;
-    if (p.timer <= 0) {
-      p.vx = (Math.random() - 0.5) * 0.6;
-      p.vy = (Math.random() - 0.5) * 0.6;
-      p.timer = Math.floor(Math.random() * 60) + 40;
+  // อัปเดตบอส
+  if (boss) {
+    boss.timer++;
+    const d = Math.hypot(player.x - boss.x, player.y - boss.y);
+    if (d > 35) {
+      boss.x += ((player.x - boss.x) / d) * 0.5;
+      boss.y += ((player.y - boss.y) / d) * 0.5;
     }
-    p.x = Math.max(15, Math.min(canvas.width - 25, p.x + p.vx));
-    p.y = Math.max(15, Math.min(canvas.height - 25, p.y + p.vy));
-  });
+    // บอสโจมตีผู้เล่น
+    if (d < 30 && boss.timer % 50 === 0) {
+      player.hp = Math.max(0, player.hp - 16);
+      particles.push({ text: '-16 บอสฟาด!', x: player.x, y: player.y - 6, color: '#ff0054', life: 25 });
+    }
+  }
+
+  // เก็บของดรอป
+  for (let i = loots.length - 1; i >= 0; i--) {
+    const l = loots[i];
+    if (Math.hypot(player.x - l.x, player.y - l.y) < 18) {
+      if (l.type === 'gold') {
+        player.gold += l.val;
+        particles.push({ text: `+${l.val}🪙`, x: player.x, y: player.y - 6, color: '#ffd166', life: 20 });
+      } else if (l.type === 'exp') {
+        player.exp += l.val;
+        particles.push({ text: `+${l.val} EXP`, x: player.x, y: player.y - 6, color: '#06d6a0', life: 20 });
+        if (player.exp >= player.maxExp) {
+          player.level++;
+          player.exp = 0;
+          player.maxExp = Math.floor(player.maxExp * 1.5);
+          player.maxHp += 20;
+          player.hp = player.maxHp;
+          particles.push({ text: 'LEVEL UP!!', x: player.x - 10, y: player.y - 12, color: '#fff', life: 40 });
+          logChat('ระบบ', `ยินดีด้วย! เลเวลอัปเป็น Lv.${player.level} พลังชีวิตเพิ่มขึ้น!`, '#ffd166');
+        }
+      }
+      loots.splice(i, 1);
+      world.save();
+    }
+  }
 
   // เกิดมอนสเตอร์ใหม่
-  if (monsters.length < MAX_MOBS && Math.random() < 0.008) spawnMonster();
+  if (monsters.length < 5 && Math.random() < 0.008) spawnMonster();
 
-  // อัปเดตเอฟเฟกต์ตัวเลขลอย
+  // อัปเดตเอฟเฟกต์ตัวเลข
   for (let i = particles.length - 1; i >= 0; i--) {
     particles[i].y -= 0.4;
     particles[i].life--;
     if (particles[i].life <= 0) particles.splice(i, 1);
   }
 
-  // อัปเดตแถบข้อความ UI
+  // อัปเดตหน้าจอ UI
+  document.getElementById('lvl-txt').innerText = player.level;
+  document.getElementById('exp-txt').innerText = `${player.exp}/${player.maxExp}`;
+  document.getElementById('gold-txt').innerText = player.gold;
   document.getElementById('wrath-txt').innerText = `${world.forestWrath}%`;
-  document.getElementById('mob-txt').innerText = monsters.length;
-  document.getElementById('karma-txt').innerText = 
-    world.karmaScore > 4 ? 'พิทักษ์ธรรมชาติ' : (world.karmaScore < -4 ? 'ผู้ทำลายล้าง' : 'เป็นกลาง');
+  document.getElementById('hp-bar-fill').style.width = `${(player.hp / player.maxHp) * 100}%`;
 }
 
-// --- 7. ลูปวาดกราฟิก (Render Loop) ---
+// --- 6. ลูปวาดภาพ 8-Bit ---
 function render() {
-  ctx.fillStyle = '#1c281a';
+  // เปลี่ยนสีท้องฟ้าเมื่อบอสเกิด
+  ctx.fillStyle = world.bossActive ? '#2c1214' : '#182216';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // หญ้าพิกเซลประปราย
-  ctx.fillStyle = '#243422';
-  for (let x = 8; x < canvas.width; x += 32) {
-    for (let y = 8; y < canvas.height; y += 32) {
-      ctx.fillRect(x, y, 2, 2);
-    }
-  }
-
-  // วาดสิ่งแวดล้อม
-  drawScenery();
-
-  // วาดมอนสเตอร์ 8-bit
-  monsters.forEach(m => {
-    if (m.type === 'mutant') {
-      drawMutantSprite(m.x, m.y, frameCount);
-    } else {
-      drawSlimeSprite(m.x, m.y, m.isFriendly, frameCount, m.bobOffset);
-    }
-    // แถบเลือดพิกเซล
-    if (m.hp < m.maxHp) {
-      ctx.fillStyle = '#111';
-      ctx.fillRect(m.x, m.y - 5, 12, 2);
-      ctx.fillStyle = '#ff3333';
-      ctx.fillRect(m.x, m.y - 5, (m.hp / m.maxHp) * 12, 2);
-    }
+  // วาดของดรอปบนพื้น
+  loots.forEach(l => {
+    ctx.fillStyle = l.type === 'gold' ? '#ffd166' : '#48cae4';
+    ctx.fillRect(l.x, l.y, 4, 4);
   });
 
-  // วาดผู้เล่นอื่น (จำลองออนไลน์)
-  otherPlayers.forEach(p => drawOtherPlayerSprite(p, frameCount));
+  // วาดคลื่นดาบ
+  projectiles.forEach(p => {
+    ctx.fillStyle = '#90e0ef';
+    ctx.fillRect(p.x, p.y, 8, 3);
+  });
+
+  // วาดมอนสเตอร์
+  monsters.forEach(m => {
+    ctx.fillStyle = m.isFriendly ? '#52b788' : (m.type === 'mutant' ? '#d90429' : '#74c69d');
+    ctx.fillRect(m.x, m.y, 10, 10);
+    // ตา
+    ctx.fillStyle = '#000';
+    ctx.fillRect(m.x + 2, m.y + 2, 2, 2);
+    ctx.fillRect(m.x + 6, m.y + 2, 2, 2);
+    // แถบเลือด
+    ctx.fillStyle = '#ff3333';
+    ctx.fillRect(m.x, m.y - 3, (m.hp / m.maxHp) * 10, 2);
+  });
+
+  // วาดบอส Ancient Drake
+  if (boss) {
+    ctx.fillStyle = '#800f2f';
+    ctx.fillRect(boss.x, boss.y, boss.size, boss.size - 6);
+    // เขาและตาบอส
+    ctx.fillStyle = '#ffb703';
+    ctx.fillRect(boss.x + 2, boss.y - 4, 4, 4);
+    ctx.fillRect(boss.x + boss.size - 6, boss.y - 4, 4, 4);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(boss.x + 6, boss.y + 6, 4, 4);
+    ctx.fillRect(boss.x + 18, boss.y + 6, 4, 4);
+    // แถบเลือดบอส
+    ctx.fillStyle = '#222';
+    ctx.fillRect(boss.x - 4, boss.y - 8, boss.size + 8, 4);
+    ctx.fillStyle = '#ff0054';
+    ctx.fillRect(boss.x - 4, boss.y - 8, (boss.hp / boss.maxHp) * (boss.size + 8), 4);
+  }
+
+  // วาดผู้เล่นอื่น
+  otherPlayers.forEach(p => {
+    ctx.fillStyle = p.role === 'mage' ? '#9d4edd' : '#d90429';
+    ctx.fillRect(p.x, p.y, 10, 12);
+  });
 
   // วาดตัวละครผู้เล่น
-  drawPlayerSprite(player.x, player.y, player.isMoving, frameCount);
+  ctx.fillStyle = '#2b7fff';
+  ctx.fillRect(player.x, player.y, 10, 12);
+  ctx.fillStyle = '#ffd8b1';
+  ctx.fillRect(player.x + 2, player.y + 2, 6, 4);
 
   // วาดเอฟเฟกต์ฟันดาบ
   if (player.attackTimer > 0) {
-    ctx.strokeStyle = '#ffffff';
+    ctx.strokeStyle = '#fff';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(player.x + 8, player.y + 8, 16, -Math.PI / 4, Math.PI / 2);
+    ctx.arc(player.x + 5, player.y + 5, 14, 0, Math.PI);
     ctx.stroke();
   }
 
-  // วาดตัวเลขความเสียหาย/ข้อความ
+  // วาดตัวเลขความเสียหาย/EXP
   particles.forEach(pt => {
     ctx.fillStyle = pt.color;
-    ctx.font = 'bold 9px monospace';
+    ctx.font = 'bold 8px monospace';
     ctx.fillText(pt.text, pt.x, pt.y);
   });
 

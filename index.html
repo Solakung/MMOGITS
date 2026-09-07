@@ -3,26 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>8-Bit Ecosystem RPG</title>
+  <title>8-Bit Ecosystem MMORPG</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <div id="game-wrapper">
-    <!-- แถบสถานะโลก -->
-    <div id="world-status">
-      <div>ป่า: <span id="wrath-txt">0%</span></div>
-      <div>กรรม: <span id="karma-txt">เป็นกลาง</span></div>
-      <div>มอนสเตอร์: <span id="mob-txt">0</span></div>
+    <!-- แถบข้อมูลตัวละครและสถานะโลก -->
+    <div id="top-bar">
+      <div id="player-stats">
+        <div><strong>Lv.<span id="lvl-txt">1</span></strong> (EXP: <span id="exp-txt">0/30</span>)</div>
+        <div id="hp-bar-bg"><div id="hp-bar-fill"></div></div>
+      </div>
+      <div id="world-stats">
+        <div>ความแค้นป่า: <span id="wrath-txt">0%</span></div>
+        <div>ทอง: <span id="gold-txt">0</span> 🪙</div>
+      </div>
     </div>
 
     <!-- จอเกม 8-Bit -->
     <canvas id="gameCanvas" width="320" height="240"></canvas>
 
-    <!-- บันทึกเหตุการณ์ในโลกจำลอง -->
-    <div id="log-box"></div>
+    <!-- ช่องแชตโลก MMORPG -->
+    <div id="chat-box">
+      <div class="chat-header">📡 ช่องแชตรวม (World Channel)</div>
+      <div id="log-box"></div>
+    </div>
 
-    <!-- แผงควบคุมบนหน้าจอมือถือ (Virtual Controls) -->
+    <!-- ปุ่มควบคุมเสมือนบนจอมือถือ -->
     <div id="touch-controls">
       <div id="dpad">
         <button class="btn-dpad up" data-dir="up">▲</button>
@@ -32,12 +40,13 @@
       </div>
 
       <div id="action-pad">
-        <button class="btn-action attack" id="btn-atk">⚔️ ล่า</button>
+        <button class="btn-action skill" id="btn-skill">⚡ คลื่นดาบ</button>
         <button class="btn-action feed" id="btn-feed">🍎 สัมพันธ์</button>
+        <button class="btn-action attack" id="btn-atk">⚔️ โจมตี</button>
       </div>
     </div>
   </div>
 
-<script src="game.js?v=2"></script>
+  <script src="game.js?v=3"></script>
 </body>
 </html>
