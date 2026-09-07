@@ -777,33 +777,64 @@ function render() {
 render();
 
 // --- 10. AI World Director (สมองกลควบคุมระบบเกม) ---
+// --- 10. AI World Director (แก้ไขให้ตัด Error และมีระบบสำรองในตัว) ---
 let isAiBusy = false;
+
+// คลังปัญญาสำรองในเครื่อง (ทำงานอัตโนมัติเมื่อ API ภายนอกขัดข้อง)
+function generateLocalAIDirector(eventContext) {
+  const wrath = world.forestWrath;
+  let response = '';
+
+  if (eventContext.includes('มังกร')) {
+    response = 'แผ่นดินสะเทือนเลื่อนลั่น กลิ่นอายแห่งความพินาศแผ่ซ่านไปทั่วซากโบราณ!';
+  } else if (wrath >= 60) {
+    const msgs = [
+      'สายลมกรีดร้องด้วยความโกรธา ผืนป่ากำลังจดจำความตายของสรรพสัตว์...',
+      'ไอหมอกสีเลือดเริ่มลอยต่ำ ความมืดกำลังกลืนกินความสงบสุข',
+      'เสียงคำรามลึกลับดังก้องจากส่วนลึกของซากปรักหักพัง'
+    ];
+    response = msgs[Math.floor(Math.random() * msgs.length)];
+  } else if (eventContext.includes('ผูกมิตร') || eventContext.includes('แบ่งปัน')) {
+    const msgs = [
+      'สายลมอ่อนโยนพัดผ่าน สรรพสัตว์เริ่มรับรู้ถึงไมตรีจิตของเจ้า',
+      'ประกายแสงแห่งพงไพรตอบรับ มิตรภาพจะนำพาความอยู่รอด',
+      'วิญญาณแห่งผืนป่ายิ้มรับความเมตตาที่เจ้ามอบให้'
+    ];
+    response = msgs[Math.floor(Math.random() * msgs.length)];
+  } else {
+    const msgs = [
+      'ชะตากรรมของโลกใบนี้ขึ้นอยู่กับทุกย่างก้าวที่เจ้าเลือกเดิน',
+      'กาลเวลาหมุนเวียน สิ่งมีชีวิตต่างดิ้นรนเพื่อเอาชีวิตรอด',
+      'ความเงียบสงัดเข้าปกคลุม แต่จงระวังภัยที่ซ่อนในเงามืด'
+    ];
+    response = msgs[Math.floor(Math.random() * msgs.length)];
+  }
+
+  logChat('เจตจำนงแห่งโลก', response, '#72dec2');
+}
 
 async function callAIDirector(eventContext) {
   if (isAiBusy) return;
   isAiBusy = true;
 
   try {
-    const prompt = `คุณคือ AI Game Master ของเกม 8-bit RPG
-สภาวะโลก:
-- ป่าพิโรธ: ${world.forestWrath}%
-- เวลา: ${world.dayPhase}
-- ค่าความสัมพันธ์ป่า: ${world.factionForest}
-- เลเวลผู้เล่น: Lv.${player.level}
-- เหตุการณ์: ${eventContext}
-
-คำสั่ง: แต่งคำพูดหรือประกาศของโลกสั้นๆ 1 ประโยค (ห้ามเกิน 18 คำ) เป็นภาษาไทยเพื่อสะท้อนผลกระทบต่ออนาคต`;
+    const prompt = `คุณคือ AI Game Master ควบคุมเกม RPG แฟนตาซี
+สถานะ: ป่าพิโรธ ${world.forestWrath}%, เวลา ${world.dayPhase}, เลเวล Lv.${player.level}
+เหตุการณ์: ${eventContext}
+คำสั่ง: แต่งคำพูดกระซิบของป่าหรือลางบอกเหตุ 1 ประโยคสั้นๆ (ไม่เกิน 15 คำ) ตอบเป็นภาษาไทย`;
 
     logChat('AI Master', 'กำลังประเมินผลกระทบต่อระบบนิเวศ...', '#888');
 
-    const url = `https://text.pollinations.ai/${encodeURIComponent(prompt)}?model=qwen`;
+    // 👉 ตัด ?model=qwen ออก เพื่อใช้โมเดลหลักฟรีที่ไม่ติด Error 404
+    const url = `https://text.pollinations.ai/${encodeURIComponent(prompt)}`;
     const res = await fetch(url);
     const msg = await res.text();
 
-    if (msg && msg.trim().length > 0) {
+    // กรองข้อความ: หากไม่ใช่ JSON Error ให้แสดงผล แต่หากมี Error ให้ใช้ระบบสำรองทันที
+    if (msg && !msg.includes('error') && !msg.includes('status') && !msg.trim().startsWith('{')) {
       logChat('เจตจำนงแห่งโลก', msg.trim(), '#72dec2');
 
-      // AI เปลี่ยนแปลงกฎของเกมจริงตามสถานะ
+      // AI เปลี่ยนแปลงกฎของเกมจริงตามระดับความแค้น
       if (world.forestWrath >= 60 && !world.bloodMoon) {
         world.bloodMoon = true;
         logChat('ภัยพิบัติ', '🌑 จันทราสีเลือดปรากฏ! มอนสเตอร์ทุกตัวติดสถานะคลุ้มคลั่ง', '#ff0054');
@@ -811,13 +842,13 @@ async function callAIDirector(eventContext) {
         world.bloodMoon = false;
         logChat('สมดุล', '🌿 ความมืดสลายไป มอนสเตอร์กลับสู่สภาวะปกติ', '#52b788');
       }
+    } else {
+      generateLocalAIDirector(eventContext);
     }
   } catch (e) {
-    console.log("AI Offline:", e);
+    // หากเน็ตหลุดหรือออฟไลน์ ให้ใช้ระบบสำรองอัตโนมัติ
+    generateLocalAIDirector(eventContext);
   } finally {
     setTimeout(() => { isAiBusy = false; }, 4000);
   }
 }
-
-// อัปเดตข้อความเควสต์ตอนเริ่มเกม
-updateQuestUI();
