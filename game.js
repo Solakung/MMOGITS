@@ -98,6 +98,9 @@ function triggerBoss() {
   };
   logChat('ระบบ', '🚨 ป่าพิโรธถึงขีดสุด! มังกรโบราณ Ancient Drake ตื่นขึ้นมาแล้ว!', '#ff3838');
   logChat('Kael', 'เหวอ! บอสเกิดแล้ว ทุกคนเตรียมอาวุธเร็ว!', '#ffd166');
+  
+  // 👉 เรียก AI เมื่อบอสเกิด
+  callAIDirector("บอส Ancient Drake ตื่นขึ้นมาเพราะการสังหารหมู่");
 }
 
 // --- 3. การควบคุม ---
@@ -147,12 +150,15 @@ function attack() {
       particles.push({ text: `-${dmg}`, x: m.x, y: m.y - 4, color: '#ff5555', life: 25 });
 
       if (m.hp <= 0) {
-        // ดรอปไอเทม
         loots.push({ x: m.x, y: m.y, type: 'gold', val: 5 });
         loots.push({ x: m.x + 4, y: m.y + 4, type: 'exp', val: 12 });
         monsters.splice(idx, 1);
         world.forestWrath = Math.min(100, world.forestWrath + 18);
         world.save();
+        
+        // 👉 เรียก AI เมื่อมอนสเตอร์ถูกสังหาร
+        callAIDirector("ผู้เล่นสังหารมอนสเตอร์ในป่า ค่าความแค้นเพิ่มขึ้น");
+
         if (world.forestWrath >= 100) triggerBoss();
       }
     }
@@ -171,6 +177,9 @@ function attack() {
       world.bossActive = false;
       world.forestWrath = 0;
       world.save();
+
+      // 👉 เรียก AI เมื่อปราบความมืดสำเร็จ
+      callAIDirector("ผู้เล่นสามารถปราบมังกร Ancient Drake ได้สำเร็จ");
     }
   }
 }
@@ -197,6 +206,9 @@ function feed() {
         m.isAggressive = false;
         particles.push({ text: '❤️ มิตรภาพ!', x: m.x, y: m.y - 6, color: '#52b788', life: 30 });
         logChat('Sylvia', `ดูนั่นสิ! เจ้า ${m.id} เชื่องแล้ว มันจะช่วยเราสู้เวลาคับขันนะ`, '#b5e2fa');
+        
+        // 👉 เรียก AI เมื่อผูกมิตรกับสิ่งมีชีวิตสำเร็จ
+        callAIDirector("ผู้เล่นสร้างมิตรภาพกับมอนสเตอร์ในป่า");
       } else {
         particles.push({ text: '+ความเชื่อใจ', x: m.x, y: m.y - 4, color: '#ffd166', life: 25 });
       }
@@ -250,7 +262,6 @@ function update() {
   // อัปเดตมอนสเตอร์ & มอนสเตอร์ที่เป็นมิตรช่วยสู้
   monsters.forEach(m => {
     if (m.isFriendly) {
-      // มอนสเตอร์มิตรจะวิ่งไปรุมตีบอส ถ้ามีบอส
       const target = boss ? boss : player;
       const d = Math.hypot(target.x - m.x, target.y - m.y);
       if (d > 25) {
@@ -291,7 +302,6 @@ function update() {
       boss.x += ((player.x - boss.x) / d) * 0.5;
       boss.y += ((player.y - boss.y) / d) * 0.5;
     }
-    // บอสโจมตีผู้เล่น
     if (d < 30 && boss.timer % 50 === 0) {
       player.hp = Math.max(0, player.hp - 16);
       particles.push({ text: '-16 บอสฟาด!', x: player.x, y: player.y - 6, color: '#ff0054', life: 25 });
@@ -343,7 +353,6 @@ function update() {
 
 // --- 6. ลูปวาดภาพ 8-Bit ---
 function render() {
-  // เปลี่ยนสีท้องฟ้าเมื่อบอสเกิด
   ctx.fillStyle = world.bossActive ? '#2c1214' : '#182216';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -363,11 +372,9 @@ function render() {
   monsters.forEach(m => {
     ctx.fillStyle = m.isFriendly ? '#52b788' : (m.type === 'mutant' ? '#d90429' : '#74c69d');
     ctx.fillRect(m.x, m.y, 10, 10);
-    // ตา
     ctx.fillStyle = '#000';
     ctx.fillRect(m.x + 2, m.y + 2, 2, 2);
     ctx.fillRect(m.x + 6, m.y + 2, 2, 2);
-    // แถบเลือด
     ctx.fillStyle = '#ff3333';
     ctx.fillRect(m.x, m.y - 3, (m.hp / m.maxHp) * 10, 2);
   });
@@ -376,14 +383,12 @@ function render() {
   if (boss) {
     ctx.fillStyle = '#800f2f';
     ctx.fillRect(boss.x, boss.y, boss.size, boss.size - 6);
-    // เขาและตาบอส
     ctx.fillStyle = '#ffb703';
     ctx.fillRect(boss.x + 2, boss.y - 4, 4, 4);
     ctx.fillRect(boss.x + boss.size - 6, boss.y - 4, 4, 4);
     ctx.fillStyle = '#fff';
     ctx.fillRect(boss.x + 6, boss.y + 6, 4, 4);
     ctx.fillRect(boss.x + 18, boss.y + 6, 4, 4);
-    // แถบเลือดบอส
     ctx.fillStyle = '#222';
     ctx.fillRect(boss.x - 4, boss.y - 8, boss.size + 8, 4);
     ctx.fillStyle = '#ff0054';
@@ -425,3 +430,35 @@ function render() {
 }
 
 render();
+
+// --- 7. ฟังก์ชันเรียก Nano LLM ฟรี 100% ---
+let isAiThinking = false;
+
+async function callAIDirector(actionDescription) {
+  if (isAiThinking) return; // ป้องกันการเรียกซ้ำซ้อนขณะที่ AI กำลังคิด
+  isAiThinking = true;
+
+  try {
+    const prompt = `คุณคือ AI ผู้ควบคุมระบบโลกของเกม 8-bit MMORPG
+สถานะปัจจุบัน:
+- ความแค้นของป่า: ${world.forestWrath}%
+- เลเวลผู้เล่น: Lv.${player.level}
+- เหตุการณ์ล่าสุด: ${actionDescription}
+
+คำสั่ง: แต่งประโยคสั้นๆ 1 ประโยค (ไม่เกิน 20 คำ) ตอบเป็นภาษาไทย เพื่อเป็นเสียงประกาศของป่าหรือคำพูดของบอส`;
+
+    logChat("AI", "กำลังประเมินผลกระทบ...", "#888");
+
+    const url = `https://text.pollinations.ai/${encodeURIComponent(prompt)}?model=qwen`;
+    const res = await fetch(url);
+    const message = await res.text();
+
+    if (message && message.trim().length > 0) {
+      logChat("เสียงจากป่า", message.trim(), "#72dec2");
+    }
+  } catch (err) {
+    console.log("AI Offline:", err);
+  } finally {
+    setTimeout(() => { isAiThinking = false; }, 3000); // หน่วงเวลา 3 วินาทีก่อนเรียกครั้งต่อไป
+  }
+}
